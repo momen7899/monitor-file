@@ -15,7 +15,7 @@ ENV S3_ENDPOINT_URL=
 ENV S3_ACCESS_KEY=
 ENV S3_SECRET_KEY=
 ENV S3_BUCKET_NAME=
-ENV WATCH_DIR=./
+ENV WATCH_DIR=./data/watch
 
 # Command to run the script
 CMD ["python", "upload_monitor.py"]
