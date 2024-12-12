@@ -11,7 +11,7 @@ endpoint_url = os.environ.get('S3_ENDPOINT_URL')
 access_key = os.environ.get('S3_ACCESS_KEY')
 secret_key = os.environ.get('S3_SECRET_KEY')
 bucket_name = os.environ.get('S3_BUCKET_NAME')
-directory_to_watch = os.environ.get('WATCH_DIR', './')  # Default to current directory if not set
+directory_to_watch = os.environ.get('WATCH_DIR', './data/watch')  # Default to current directory if not set
 
 # Create an S3 client
 session = boto3.session.Session()
@@ -31,15 +31,42 @@ class FileUploadHandler(FileSystemEventHandler):
         
         # File created, so we upload it
         file_path = event.src_path
+        if self.is_ignored_file(file_path):
+            print(f"Ignored file: {file_path}")
+            return
+
+        # File created, so upload it
         self.upload_file(file_path)
 
-    def upload_file(self, file_path):
+    def on_modified(self, event):
+        # Check if the modified event is for a file
+        if event.is_directory:
+            return  # Ignore directories
+
+        file_path = event.src_path
+        if self.is_ignored_file(file_path):
+            print(f"Ignored modified file: {file_path}")
+            return
+
+        # File modified, save it
+        self.upload_file(file_path, update=True)
+
+    def upload_file(self, file_path, update=False):
         file_name = os.path.basename(file_path)
         try:
             s3_client.upload_file(file_path, bucket_name, file_name)
-            print(f"Uploaded: {file_name} to {bucket_name}.")
+            action = "Updated" if update else "Uploaded"
+            print(f"{action}: {file_name} to {bucket_name}.")
         except NoCredentialsError:
             print("Credentials not available for S3 upload.")
+
+    @staticmethod
+    def is_ignored_file(file_path):
+        # Ignore files based on extension or patterns
+        ignored_extensions = {".swp", ".tmp", ".bak", ".swx"}  # Add more extensions as needed
+        file_name = os.path.basename(file_path)
+        return any(file_name.endswith(ext) for ext in ignored_extensions)
+
 
 if __name__ == "__main__":
     event_handler = FileUploadHandler()
@@ -48,7 +75,7 @@ if __name__ == "__main__":
 
     try:
         observer.start()
-        print(f"Monitoring {directory_to_watch} for new files...")
+        print(f"Monitoring {directory_to_watch} for file changes...")
         while True:
             time.sleep(1)  # Keep the script running
     except KeyboardInterrupt:
